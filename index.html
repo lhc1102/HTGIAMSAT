@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -6,16 +7,30 @@
     <title>Leaflet Map with Continuous Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        #map { height: 80vh; width: 100%; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
         #directionsBtn {
             position: absolute;
             top: 10px;
-            left: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             padding: 10px;
-            background-color: white;
+            background-color: red;
+            color: white;
             border: 1px solid black;
             cursor: pointer;
             z-index: 1000;
+            font-weight: bold;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -25,14 +40,15 @@
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        var channelID = '2640613'; // Thay bằng Channel ID của bạn
-        var readAPIKey = 'RQ3T9CIDUGWU42U8'; // Thay bằng Read API Key của bạn
+        var channelID = '2640613'; 
+        var readAPIKey = 'RQ3T9CIDUGWU42U8'; 
 
         var map, userMarker, thingSpeakMarker, routeLayer;
         var userPosition = null;
         var thingSpeakPosition = null;
+        var routeVisible = false; 
+        var routeNeedsUpdate = false;
 
-        // Khởi tạo bản đồ
         function initializeMap(lat, lon) {
             map = L.map('map').setView([lat, lon], 13);
 
@@ -41,7 +57,6 @@
             }).addTo(map);
         }
 
-        // Lấy dữ liệu từ ThingSpeak
         function fetchThingSpeakData() {
             var url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=1`;
 
@@ -55,23 +70,24 @@
                     if (!isNaN(latitude) && !isNaN(longitude)) {
                         thingSpeakPosition = [latitude, longitude];
 
-                        // Cập nhật hoặc tạo marker cho vị trí người già
                         if (thingSpeakMarker) {
                             thingSpeakMarker.setLatLng(thingSpeakPosition)
-                                .bindPopup(`Vị trí người già: <br>Vĩ độ: ${latitude}, Kinh độ: ${longitude}`)
+                                .bindPopup(`Người già`)
                                 .openPopup();
                         } else {
                             thingSpeakMarker = L.marker(thingSpeakPosition, {
                                 icon: L.icon({
-                                    iconUrl: 'https://cdn3.vectorstock.com/i/1000x1000/21/37/old-man-going-with-walking-stick-silhouette-icon-vector-28542137.jpg', // Đường dẫn tới hình ảnh mới
-                                    iconSize: [30, 30], // Kích thước của icon (có thể điều chỉnh)
-                                    iconAnchor: [15, 30], // Vị trí neo của icon
-                                    popupAnchor: [0, -30] // Vị trí hiển thị popup
+                                    iconUrl: 'https://cdn3.vectorstock.com/i/1000x1000/21/37/old-man-going-with-walking-stick-silhouette-icon-vector-28542137.jpg',
+                                    iconSize: [30, 30], 
+                                    iconAnchor: [15, 30],
+                                    popupAnchor: [0, -30]
                                 })
                             }).addTo(map)
-                                .bindPopup(`Vị trí người già: <br>Vĩ độ: ${latitude}, Kinh độ: ${longitude}`)
+                                .bindPopup(`Người già`)
                                 .openPopup();
                         }
+
+                        routeNeedsUpdate = true;
                     } else {
                         console.log('Invalid ThingSpeak data:', feed);
                     }
@@ -79,7 +95,6 @@
                 .catch(error => console.log('Error fetching data from ThingSpeak:', error));
         }
 
-        // Theo dõi vị trí người dùng
         function trackUserPosition() {
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(function (position) {
@@ -94,13 +109,14 @@
                     } else {
                         userMarker.setLatLng(userPosition);
                     }
+
+                    routeNeedsUpdate = true;
                 });
             } else {
                 alert("Trình duyệt của bạn không hỗ trợ Geolocation.");
             }
         }
 
-        // Vẽ đường đi giữa hai điểm
         function drawRoute(start, end) {
             var url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?geometries=geojson&overview=full`;
 
@@ -121,19 +137,38 @@
                 .catch(err => console.log('Lỗi khi lấy đường đi:', err));
         }
 
-        // Bắt sự kiện nhấn nút "Vẽ đường đi"
-        document.getElementById('directionsBtn').addEventListener("click", function () {
+        function updateRoute() {
             if (userPosition && thingSpeakPosition) {
                 drawRoute(userPosition, thingSpeakPosition);
+                routeNeedsUpdate = false;
+            }
+        }
+
+        document.getElementById('directionsBtn').addEventListener("click", function () {
+            if (userPosition && thingSpeakPosition) {
+                if (routeVisible) {
+                    map.removeLayer(routeLayer);
+                    routeVisible = false;
+                    this.innerText = "Vẽ đường đi";
+                } else {
+                    updateRoute();
+                    routeVisible = true;
+                    this.innerText = "Tắt đường đi";
+                }
             } else {
                 alert("Chưa có đủ thông tin vị trí để vẽ đường.");
             }
         });
 
-        // Khởi chạy tính năng
         fetchThingSpeakData();
-        setInterval(fetchThingSpeakData, 15000); // Cập nhật từ ThingSpeak mỗi 15 giây
+        setInterval(fetchThingSpeakData, 15000);
         trackUserPosition();
+
+        setInterval(function () {
+            if (routeVisible && routeNeedsUpdate) {
+                updateRoute();
+            }
+        }, 1000);
     </script>
 </body>
 </html>
